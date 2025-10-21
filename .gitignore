@@ -1,0 +1,10 @@
+# Ignore everything at repo root
+yolo*.pt
+runs
+reaper
+node
+fastgrab
+__pycache__
+.venv
+data
+
