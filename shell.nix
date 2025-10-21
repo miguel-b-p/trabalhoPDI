@@ -22,6 +22,13 @@ pkgs.mkShell {
     stdenv.cc.cc.lib
     zlib 
     zlib.dev
+    ninja
+    meson
+    
+    # Cairo dependencies
+    cairo cairo.dev
+    gobject-introspection
+    gtk3 gtk3.dev
 
     # OpenGL + Mesa
     libglvnd libGLU mesa
@@ -46,6 +53,9 @@ pkgs.mkShell {
     
     # Backend alternativo
     gtk2-x11 gtk2
+    
+    # SDL2 para Kivy
+    SDL2 SDL2_image SDL2_mixer SDL2_ttf
 
     ffmpeg
 
@@ -67,6 +77,31 @@ pkgs.mkShell {
   '';
 
   postShellHook = ''
+    export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
+      pkgs.stdenv.cc.cc.lib
+      pkgs.xorg.libX11
+      pkgs.xorg.libXext
+      pkgs.xorg.libXrender
+      pkgs.xorg.libXtst
+      pkgs.xorg.libXi
+      pkgs.xorg.libXrandr
+      pkgs.xorg.libXcursor
+      pkgs.xorg.libXdamage
+      pkgs.xorg.libXfixes
+      pkgs.xorg.libXxf86vm
+      pkgs.xorg.libxcb
+      pkgs.libglvnd
+      pkgs.libGLU
+      pkgs.mesa
+      pkgs.mesa.drivers
+      pkgs.zlib
+      pkgs.cairo
+      pkgs.gtk3
+      pkgs.SDL2
+      pkgs.SDL2_image
+      pkgs.SDL2_mixer
+      pkgs.SDL2_ttf
+    ]}:$LD_LIBRARY_PATH"
     export QT_QPA_PLATFORM="xcb"
     export QT_PLUGIN_PATH="${qt.qtbase}/lib/qt-${qt.qtbase.version}/plugins"
     export QT_QPA_PLATFORM_PLUGIN_PATH="${qt.qtbase}/lib/qt-${qt.qtbase.version}/plugins/platforms"

@@ -1,0 +1,13 @@
+#:kivy 1.0
+
+<Controller>:
+    button_wid: custom_button
+
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 0
+
+        Button:
+            id: custom_button
+            text: 'Hello, World?'
+            on_press: root.button_pressed()
