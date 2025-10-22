@@ -1,0 +1,36 @@
+# YOLO Benchmark System - Dependências
+
+# Core ML
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Visualização
+bokeh>=3.0.0
+jupyter_bokeh>=4.0.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+
+# Interface Jupyter
+ipywidgets>=8.0.0
+jupyterlab>=4.0.0
+notebook>=7.0.0
+ipython>=8.0.0
+
+# Análise de dados
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Utilitários
+pyyaml>=6.0
+tqdm>=4.65.0
+pillow>=10.0.0
+
+# Opcional: Euporie (terminal Jupyter)
+# euporie>=2.0.0
+
+# Desenvolvimento e testes
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0
