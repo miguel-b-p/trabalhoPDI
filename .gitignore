@@ -1,10 +1,55 @@
-# Ignore everything at repo root
-yolo*.pt
-runs
-reaper
-node
-fastgrab
-__pycache__
-.venv
-data
-bkp
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv/
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Results (will be created by system)
+results/
+runs/
+
+# Model files (will be downloaded)
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# Data files
+data/
+datasets/
+*.zip
+*.tar.gz
+
+# Local configuration
+config_local.yaml
+config_local.json
+.env.local
