@@ -349,6 +349,9 @@ class BenchmarkMenu:
         """
         Show preview of benchmark tests.
         
+        Automatically displays rounded values for integer-type variables
+        (e.g., epochs, batch, imgsz) to match what will actually be used.
+        
         Args:
             variable_name: Variable to benchmark
             max_value: Maximum value
@@ -356,21 +359,58 @@ class BenchmarkMenu:
         """
         self.console.print("\n[bold]Preview do Benchmark:[/bold]\n")
         
+        # Check if this variable requires integer values
+        all_vars = YOLOHyperparameters.get_all_variables()
+        is_integer_type = all_vars.get(variable_name) == int
+        
         table = Table(border_style="blue")
         table.add_column("Teste", style="cyan", justify="center")
         table.add_column("Fração", style="green", justify="center")
         table.add_column(variable_name, style="yellow", justify="right")
         
+        # Add note if values will be rounded
+        if is_integer_type:
+            table.add_column("Info", style="dim", justify="left")
+        
         for i in range(num_fractions):
             fraction = (i + 1) / num_fractions
             value = fraction * max_value
-            table.add_row(
-                str(i + 1),
-                f"{i + 1}/{num_fractions}",
-                f"{value:.4f}"
-            )
+            
+            # Round if integer type
+            if is_integer_type:
+                rounded_value = round(value)
+                
+                # Show both original and rounded if different
+                if value != rounded_value:
+                    table.add_row(
+                        str(i + 1),
+                        f"{i + 1}/{num_fractions}",
+                        f"{rounded_value}",
+                        f"(~{value:.2f})"
+                    )
+                else:
+                    table.add_row(
+                        str(i + 1),
+                        f"{i + 1}/{num_fractions}",
+                        f"{rounded_value}",
+                        ""
+                    )
+            else:
+                # Show decimal values for float types
+                table.add_row(
+                    str(i + 1),
+                    f"{i + 1}/{num_fractions}",
+                    f"{value:.4f}"
+                )
         
         self.console.print(table)
+        
+        # Show rounding note if applicable
+        if is_integer_type:
+            self.console.print(
+                "\n[dim]ℹ️  Valores serão automaticamente arredondados "
+                f"('{variable_name}' requer integers)[/dim]"
+            )
         
         # Estimate time
         avg_time_per_test = 30 * 60  # Estimate 30 min per test

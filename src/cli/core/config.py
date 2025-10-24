@@ -366,9 +366,12 @@ class YOLOHyperparameters(BaseModel):
         """
         Set value of a specific hyperparameter by name.
         
+        Automatically rounds fractional values to integers when the field
+        type is 'int', preventing Pydantic validation errors.
+        
         Args:
             variable_name: Name of the hyperparameter
-            value: New value to set
+            value: New value to set (will be auto-rounded if needed)
         
         Raises:
             ValueError: If variable_name doesn't exist
@@ -382,6 +385,29 @@ class YOLOHyperparameters(BaseModel):
             self.postprocessing
         ]:
             if hasattr(category, variable_name):
+                # Get field information to check if it requires integer
+                field_info = category.model_fields.get(variable_name)
+                
+                if field_info:
+                    # Check if the field type is int
+                    field_type = field_info.annotation
+                    
+                    # If field is int and value is float, round it
+                    if field_type == int and isinstance(value, (float, int)):
+                        # Round to nearest integer using standard rounding
+                        rounded_value = round(value)
+                        
+                        # Log the rounding if there was a fractional part
+                        if isinstance(value, float) and value != rounded_value:
+                            from .logger import get_logger
+                            logger = get_logger()
+                            logger.info(
+                                f"Auto-rounded '{variable_name}': "
+                                f"{value:.6f} → {rounded_value} (int required)"
+                            )
+                        
+                        value = rounded_value
+                
                 setattr(category, variable_name, value)
                 return
         
