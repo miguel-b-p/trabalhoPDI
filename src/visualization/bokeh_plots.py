@@ -134,11 +134,12 @@ class BokehVisualizer:
             color=Category20[20][0],
             line_width=2
         )
-        p.circle(
+        p.scatter(
             fractions,
             summary['map50'],
             size=8,
-            color=Category20[20][0]
+            color=Category20[20][0],
+            marker="circle"
         )
         
         # Plot mAP@0.5:0.95
@@ -149,11 +150,12 @@ class BokehVisualizer:
             color=Category20[20][1],
             line_width=2
         )
-        p.circle(
+        p.scatter(
             fractions,
             summary['map50_95'],
             size=8,
-            color=Category20[20][1]
+            color=Category20[20][1],
+            marker="circle"
         )
         
         # Plot F1-Score
@@ -164,11 +166,12 @@ class BokehVisualizer:
             color=Category20[20][2],
             line_width=2
         )
-        p.circle(
+        p.scatter(
             fractions,
             summary['f1_score'],
             size=8,
-            color=Category20[20][2]
+            color=Category20[20][2],
+            marker="circle"
         )
         
         # Add hover tool
@@ -203,12 +206,22 @@ class BokehVisualizer:
         # Prepare data
         summary = results.get_summary_dataframe()
         
+        # Normalize memory for sizing (10-40 pixel range)
+        mem_array = np.array(summary['memory_peak'])
+        # Handle edge case: if all memory values are the same
+        if mem_array.max() > 0 and mem_array.max() != mem_array.min():
+            sizes = 10 + (mem_array / mem_array.max()) * 30
+        else:
+            sizes = np.full_like(mem_array, 20.0)  # Default size
+        
+        # ✅ CORREÇÃO: Adicionar sizes como coluna no ColumnDataSource
         source = ColumnDataSource(data=dict(
             time=summary['time_per_epoch'],
             map50=summary['map50'],
             memory=summary['memory_peak'],
             fraction=summary['fraction'],
-            value=summary['variable_value']
+            value=summary['variable_value'],
+            sizes=sizes.tolist()  # ✅ Adicionar sizes como coluna!
         ))
         
         # Create figure
@@ -222,20 +235,18 @@ class BokehVisualizer:
         )
         
         # Scatter plot with size based on memory
-        # Normalize memory for sizing
-        mem_array = np.array(summary['memory_peak'])
-        sizes = 10 + (mem_array / mem_array.max()) * 30  # 10-40 pixel range
-        
+        # ✅ CORREÇÃO: Referenciar 'sizes' como string (nome da coluna)
         p.scatter(
             'time',
             'map50',
-            size=sizes.tolist(),
+            size='sizes',  # ✅ String referenciando coluna no source!
             source=source,
             color=linear_cmap('memory', Viridis256, 
                             min(summary['memory_peak']),
                             max(summary['memory_peak'])),
             alpha=0.7,
-            legend_label="Tests"
+            legend_label="Tests",
+            marker="circle"
         )
         
         # Add hover tool
@@ -346,11 +357,12 @@ class BokehVisualizer:
             color=Category20[20][3],
             line_width=3
         )
-        p.circle(
+        p.scatter(
             test_numbers,
             final_losses,
             size=10,
-            color=Category20[20][3]
+            color=Category20[20][3],
+            marker="circle"
         )
         
         # Add hover tool
