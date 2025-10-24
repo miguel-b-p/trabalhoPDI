@@ -1,8 +1,15 @@
-"""Core backend logic for YOLO benchmarking system."""
+"""
+Core module for YOLO Hyperparameter Benchmark System.
 
-from .trainer import YOLOTrainer
-from .benchmark import BenchmarkOrchestrator
-from .monitor import TrainingMonitor
-from .metrics import MetricsCollector
+This module contains the business logic (Model layer in MVC architecture):
+- Configuration management (Pydantic models)
+- Training orchestration
+- Metrics collection and analysis
+- Benchmark engine
 
-__all__ = ["YOLOTrainer", "BenchmarkOrchestrator", "TrainingMonitor", "MetricsCollector"]
+Author: UNIP Research Team
+Project: Influência de Hiperparâmetros no Treinamento do YOLO
+"""
+
+__version__ = "1.0.0"
+__author__ = "UNIP Research Team"

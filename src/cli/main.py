@@ -1,159 +1,223 @@
+#!/usr/bin/env python3
 """
-Main CLI interface using Rich for YOLO hyperparameter benchmarking.
+Main entry point for the YOLO Hyperparameter Benchmark System.
+
+This is the CLI application that researchers use to conduct systematic
+hyperparameter experiments as described in the paper:
+"Influência de Hiperparâmetros no Treinamento do YOLO" (UNIP, 2025)
+
+Usage:
+    python -m src.cli.main
+    
+    Or with custom configuration:
+    python -m src.cli.main --config path/to/config.yaml
 """
 
-import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
-from rich.prompt import Prompt, Confirm
-from rich.layout import Layout
-from rich.live import Live
 import sys
+import argparse
 from pathlib import Path
+from rich.console import Console
+from rich.traceback import install
 
-from .commands import benchmark_cmd, config_cmd, analyze_cmd
+# Install rich tracebacks for better error messages
+install(show_locals=True)
 
-console = Console()
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from src.cli.core.config import ProjectConfig, YOLOHyperparameters
+from src.cli.core.logger import setup_logger
+from src.cli.core.utils import load_yaml_config, get_device_info
+from src.cli.menu import MainMenu
 
 
-@click.group()
-@click.version_option(version="1.0.0", prog_name="YOLO Benchmark")
-@click.pass_context
-def main(ctx):
+def parse_args() -> argparse.Namespace:
     """
-    YOLO Hyperparameter Benchmarking System
+    Parse command-line arguments.
     
-    A comprehensive tool for analyzing how YOLO hyperparameters affect model performance.
-    Based on the research: "Influência de Hiperparâmetros no Treinamento do YOLO"
+    Returns:
+        Parsed arguments
     """
-    ctx.ensure_object(dict)
+    parser = argparse.ArgumentParser(
+        description="YOLO Hyperparameter Benchmark System",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with default configuration
+  python -m src.cli.main
+  
+  # Run with custom config
+  python -m src.cli.main --config my_config.yaml
+  
+  # Specify dataset
+  python -m src.cli.main --dataset /path/to/data.yaml
+  
+  # Enable verbose logging
+  python -m src.cli.main --verbose
+
+For more information, see the README.md file.
+        """
+    )
+    
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Path to configuration YAML file (default: config.yaml)"
+    )
+    
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        help="Path to dataset YAML file (overrides config)"
+    )
+    
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="yolov8m.pt",
+        help="YOLO model variant (default: yolov8m.pt)"
+    )
+    
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging"
+    )
+    
+    parser.add_argument(
+        "--no-gpu",
+        action="store_true",
+        help="Force CPU usage (disable GPU)"
+    )
+    
+    return parser.parse_args()
 
 
-@main.command()
-def welcome():
-    """Display welcome screen with system overview."""
+def load_project_config(args: argparse.Namespace) -> tuple[ProjectConfig, dict]:
+    """
+    Load project configuration from file or create default.
     
-    # Create welcome banner
-    welcome_text = Text()
-    welcome_text.append("🎯 YOLO Hyperparameter Benchmarking System\n", style="bold cyan")
-    welcome_text.append("Based on UNIVERSIDADE PAULISTA Research\n", style="italic")
-    welcome_text.append("\"Influência de Hiperparâmetros no Treinamento do YOLO\"\n", style="dim")
+    Args:
+        args: Command-line arguments
     
-    # Create features table
-    features_table = Table(title="System Features", show_header=True, header_style="bold magenta")
-    features_table.add_column("Feature", style="cyan", no_wrap=True)
-    features_table.add_column("Description", style="white")
+    Returns:
+        Tuple of (ProjectConfig instance, full config_dict from YAML)
+    """
+    console = Console()
     
-    features_table.add_row("📊 Benchmark Engine", "Systematic parameter testing with fractional increments")
-    features_table.add_row("🎛️  Rich CLI", "Interactive configuration with beautiful terminal UI")
-    features_table.add_row("📈 Bokeh Charts", "Interactive visualization of parameter impacts")
-    features_table.add_row("🔍 Real-time Monitoring", "CPU, GPU, and memory usage tracking")
-    features_table.add_row("📋 Comprehensive Reports", "Detailed analysis and recommendations")
-    
-    # Create commands table
-    commands_table = Table(title="Available Commands", show_header=True, header_style="bold green")
-    commands_table.add_column("Command", style="yellow", no_wrap=True)
-    commands_table.add_column("Description", style="white")
-    
-    commands_table.add_row("benchmark", "Run parameter benchmarking experiments")
-    commands_table.add_row("config", "Configure benchmark parameters")
-    commands_table.add_row("analyze", "Analyze and visualize results")
-    commands_table.add_row("welcome", "Show this welcome screen")
-    
-    # Display everything
-    console.print(Panel(welcome_text, title="Welcome", border_style="blue"))
-    console.print()
-    console.print(features_table)
-    console.print()
-    console.print(commands_table)
-
-
-@main.command()
-def quickstart():
-    """Interactive quick start guide."""
-    
-    console.print(Panel("🚀 Quick Start Guide", style="bold green"))
-    
-    # Step 1: Check system
-    console.print("\n[bold blue]Step 1: System Check[/bold blue]")
-    
-    from ..config import BenchmarkConfig
-    config = BenchmarkConfig()
-    
-    issues = config.validate()
-    if issues:
-        console.print("[red]❌ Configuration issues found:[/red]")
-        for issue in issues:
-            console.print(f"  • {issue}")
+    # Try to load from config file
+    if args.config.exists():
+        try:
+            console.print(f"[cyan]Loading configuration from:[/cyan] {args.config}")
+            config_dict = load_yaml_config(args.config)
+            
+            # Create ProjectConfig
+            project_config = ProjectConfig(
+                project_name=config_dict.get("project_name", "yolo_benchmark"),
+                model_variant=args.model or config_dict.get("model_variant", "yolov8m.pt"),
+                dataset_path=args.dataset or Path(config_dict["dataset_path"]),
+                models_dir=Path(config_dict.get("models_dir", "src/models")),
+                results_dir=Path(config_dict.get("results_dir", "src/results")),
+                device=None if args.no_gpu else config_dict.get("device"),
+                workers=config_dict.get("workers", 8),
+                verbose=args.verbose or config_dict.get("verbose", True)
+            )
+            
+            return project_config, config_dict
+            
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not load config file: {e}[/yellow]")
+            console.print("[yellow]Using default configuration[/yellow]")
+            project_config = create_default_config(args)
+            return project_config, {}
     else:
-        console.print("[green]✅ System configuration valid[/green]")
-    
-    # Step 2: Show resource estimate
-    console.print("\n[bold blue]Step 2: Resource Estimate[/bold blue]")
-    
-    resource_summary = config.get_resource_summary()
-    
-    resource_table = Table(show_header=True, header_style="bold cyan")
-    resource_table.add_column("Metric")
-    resource_table.add_column("Value")
-    
-    resource_table.add_row("Total Experiments", str(resource_summary["total_runs"]))
-    resource_table.add_row("Estimated Time", f"{resource_summary['estimated_time_hours']:.1f} hours")
-    resource_table.add_row("Memory Limit", f"{resource_summary['memory_limit_gb']} GB")
-    resource_table.add_row("Parallel Jobs", str(resource_summary["max_parallel_jobs"]))
-    
-    console.print(resource_table)
-    
-    # Step 3: Interactive setup
-    console.print("\n[bold blue]Step 3: Interactive Setup[/bold blue]")
-    
-    if Confirm.ask("Would you like to customize the benchmark configuration?"):
-        # Allow user to modify key parameters
-        new_epochs = Prompt.ask(
-            "Maximum epochs per experiment",
-            default=str(config.max_epochs),
-            show_default=True
-        )
-        try:
-            config.max_epochs = int(new_epochs)
-        except ValueError:
-            console.print("[yellow]Using default epochs[/yellow]")
-        
-        new_batch = Prompt.ask(
-            "Maximum batch size",
-            default=str(config.max_batch_size),
-            show_default=True
-        )
-        try:
-            config.max_batch_size = int(new_batch)
-        except ValueError:
-            console.print("[yellow]Using default batch size[/yellow]")
-        
-        # Save configuration
-        config_path = Path("config/custom_benchmark.yaml")
-        config_path.parent.mkdir(exist_ok=True)
-        
-        with open(config_path, 'w') as f:
-            import yaml
-            yaml.dump(config.to_dict(), f, default_flow_style=False)
-        
-        console.print(f"[green]Configuration saved to {config_path}[/green]")
-    
-    # Step 4: Run recommendation
-    console.print("\n[bold blue]Step 4: Ready to Run[/bold blue]")
-    console.print("\nTo start benchmarking:")
-    console.print("  [cyan]yolo-benchmark benchmark[/cyan] - Run with default config")
-    console.print("  [cyan]yolo-benchmark benchmark --config config/custom_benchmark.yaml[/cyan] - Run with custom config")
-    console.print("  [cyan]yolo-benchmark analyze[/cyan] - Analyze existing results")
+        console.print(f"[yellow]Config file not found: {args.config}[/yellow]")
+        console.print("[yellow]Using default configuration[/yellow]")
+        project_config = create_default_config(args)
+        return project_config, {}
 
 
-# Add commands to main group
-main.add_command(benchmark_cmd)
-main.add_command(config_cmd)
-main.add_command(analyze_cmd)
+def create_default_config(args: argparse.Namespace) -> ProjectConfig:
+    """
+    Create default project configuration.
+    
+    Args:
+        args: Command-line arguments
+    
+    Returns:
+        Default ProjectConfig
+    """
+    # Check for dataset
+    if not args.dataset:
+        console = Console()
+        console.print("[bold red]Error:[/bold red] Dataset path not specified!")
+        console.print("Please provide --dataset argument or create config.yaml")
+        sys.exit(1)
+    
+    return ProjectConfig(
+        project_name="yolo_benchmark",
+        model_variant=args.model,
+        dataset_path=args.dataset,
+        models_dir=Path("src/models"),
+        results_dir=Path("src/results"),
+        device=None if args.no_gpu else None,  # Auto-detect
+        workers=8,
+        verbose=args.verbose
+    )
+
+
+def main() -> None:
+    """Main entry point."""
+    # Parse arguments
+    args = parse_args()
+    
+    # Create console
+    console = Console()
+    
+    try:
+        # Load project configuration
+        project_config, config_dict = load_project_config(args)
+        
+        # Ensure directories exist
+        project_config.ensure_directories()
+        
+        # Setup logger
+        logger = setup_logger(
+            log_dir=project_config.results_dir / "logs",
+            console=console,
+            level=10 if args.verbose else 20  # DEBUG if verbose, else INFO
+        )
+        
+        logger.section("YOLO Hyperparameter Benchmark System")
+        logger.info(f"Project: {project_config.project_name}")
+        logger.info(f"Model: {project_config.model_variant}")
+        logger.info(f"Dataset: {project_config.dataset_path}")
+        
+        # Show device info
+        device_info = get_device_info()
+        logger.info(f"Device: {device_info['device']}")
+        if device_info['device'] == 'cuda':
+            logger.info(f"GPU: {device_info.get('gpu_name', 'Unknown')}")
+        
+        # Create and run main menu
+        menu = MainMenu(
+            project_config=project_config,
+            logger=logger,
+            console=console,
+            yaml_config_dict=config_dict
+        )
+        
+        menu.run()
+        
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Program interrupted by user[/yellow]")
+        sys.exit(0)
+    
+    except Exception as e:
+        console.print(f"\n[bold red]Fatal error:[/bold red] {str(e)}")
+        console.print_exception()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

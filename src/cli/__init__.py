@@ -1,6 +1,12 @@
-"""CLI interface for YOLO hyperparameter benchmarking."""
+"""
+CLI module for YOLO Hyperparameter Benchmark System.
 
-from .main import main
-from .commands import benchmark_cmd, config_cmd, analyze_cmd
+This module implements the View and Controller layers of the MVC architecture,
+providing a beautiful and intuitive Rich-based command-line interface.
 
-__all__ = ["main", "benchmark_cmd", "config_cmd", "analyze_cmd"]
+Author: UNIP Research Team
+Project: Influência de Hiperparâmetros no Treinamento do YOLO
+"""
+
+__version__ = "1.0.0"
+__author__ = "UNIP Research Team"

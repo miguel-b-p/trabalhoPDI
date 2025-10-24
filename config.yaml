@@ -1,0 +1,130 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# YOLO Hyperparameter Benchmark System - Configuration File
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Project: Influência de Hiperparâmetros no Treinamento do YOLO
+# Institution: UNIP - Universidade Paulista
+# Year: 2025
+#
+# This configuration file defines the default settings for the benchmark system.
+# All values can be overridden via command-line arguments or through the CLI menu.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Project Information
+project_name: "yolo_benchmark"
+model_variant: "yolov8m.pt"  # Options: yolov8n/s/m/l/x.pt
+
+# Dataset Configuration
+# IMPORTANT: Update this path to point to your dataset's data.yaml file
+dataset_path: "bkp/test/data/data.yaml"
+
+# Directory Structure
+models_dir: "src/models"          # Trained models and checkpoints
+results_dir: "src/results"        # Benchmark results and visualizations
+
+# Hardware Configuration
+device: null                       # null = auto-detect (cuda/mps/cpu)
+workers: 8                         # Number of dataloader workers
+
+# Logging
+verbose: true                      # Enable verbose logging
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Default Hyperparameters
+# ═══════════════════════════════════════════════════════════════════════════
+
+default_hyperparameters:
+  # Optimization
+  lr0: 0.01                        # Initial learning rate
+  lrf: 0.01                        # Final learning rate (lr0 * lrf)
+  momentum: 0.937                  # SGD momentum/Adam beta1
+  weight_decay: 0.0005             # Optimizer weight decay
+  warmup_epochs: 3.0               # Warmup epochs
+  warmup_momentum: 0.8             # Warmup initial momentum
+  warmup_bias_lr: 0.1              # Warmup initial bias lr
+  optimizer: "SGD"                 # Optimizer: SGD/Adam/AdamW/RMSProp
+  
+  # Batch Configuration
+  batch: 16                        # Batch size (-1 for auto-batch)
+  nbs: 64                          # Nominal batch size for loss normalization
+  
+  # Architecture
+  imgsz: 640                       # Input image size (must be multiple of 32)
+  epochs: 10                      # Number of training epochs
+  patience: 50                     # Early stopping patience
+  
+  # Data Augmentation - Color Space
+  hsv_h: 0.015                     # HSV-Hue augmentation (fraction)
+  hsv_s: 0.7                       # HSV-Saturation augmentation
+  hsv_v: 0.4                       # HSV-Value augmentation
+  
+  # Data Augmentation - Geometric
+  degrees: 0.0                     # Image rotation (+/- deg)
+  translate: 0.1                   # Image translation (+/- fraction)
+  scale: 0.5                       # Image scale (+/- gain)
+  shear: 0.0                       # Image shear (+/- deg)
+  perspective: 0.0                 # Image perspective (+/- fraction)
+  
+  # Data Augmentation - Flips
+  flipud: 0.0                      # Vertical flip probability
+  fliplr: 0.5                      # Horizontal flip probability
+  
+  # Data Augmentation - Advanced
+  mosaic: 1.0                      # Mosaic augmentation probability
+  mixup: 0.0                       # MixUp augmentation probability
+  copy_paste: 0.0                  # Copy-paste augmentation probability
+  
+  # Regularization
+  dropout: 0.0                     # Dropout probability (label_smoothing REMOVED in v8+)
+  
+  # Post-processing (NMS)
+  conf: 0.25                       # Object confidence threshold
+  iou: 0.7                         # IoU threshold for NMS
+  max_det: 300                     # Maximum detections per image
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Benchmark Configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+benchmark:
+  default_fractions: 5             # Default number of fractions to test
+  parallel_jobs: 1                 # Number of parallel training jobs
+  seed: 42                         # Random seed for reproducibility
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Visualization Settings
+# ═══════════════════════════════════════════════════════════════════════════
+
+visualization:
+  bokeh_theme: "caliber"           # Bokeh theme
+  save_format: "html"              # Output format for visualizations
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Notes for Researchers
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 1. Fractional Benchmark Methodology:
+#    The system tests hyperparameters at fractions (1/N, 2/N, ..., N/N) of
+#    a maximum value, enabling systematic investigation of their effects.
+#
+# 2. Recommended Variables to Benchmark:
+#    - epochs: Training duration impact
+#    - lr0: Learning rate effects
+#    - batch: Batch size vs performance trade-off
+#    - imgsz: Resolution impact on accuracy and speed
+#    - mosaic/mixup: Data augmentation strength
+#
+# 3. Performance Considerations:
+#    - Each benchmark test runs a full training session
+#    - Estimated time: 30-60 minutes per test (depends on epochs and dataset)
+#    - GPU highly recommended (CUDA or MPS)
+#    - Monitor disk space for model checkpoints
+#
+# 4. Academic Rigor:
+#    - Always set a fixed seed for reproducibility
+#    - Document hardware configuration in results
+#    - Keep detailed logs of all experiments
+#    - Compare results with baseline configurations
+#
+# ═══════════════════════════════════════════════════════════════════════════

@@ -1,300 +1,401 @@
 """
-YOLO training wrapper with comprehensive monitoring and metrics collection.
+YOLO training wrapper with comprehensive metrics collection.
+
+This module provides a high-level interface to ultralytics YOLO training
+with integrated metrics collection, resource monitoring, and result tracking.
+
+Implements the training methodology described in the research paper:
+"Influência de Hiperparâmetros no Treinamento do YOLO" (UNIP, 2025)
 """
 
-import os
-import time
-import json
-import psutil
-import torch
-import numpy as np
-from typing import Dict, Any, Optional, List
+from typing import Optional, Dict, Any, Callable
 from pathlib import Path
+import time
+import torch
 from ultralytics import YOLO
-from datetime import datetime
-import logging
 
-from config import YOLOConfig
-from .monitor import TrainingMonitor
-from .metrics import MetricsCollector
+from .config import YOLOHyperparameters, ProjectConfig
+from .metrics import (
+    TrainingMetrics,
+    PerformanceMetrics,
+    MetricsCollector,
+    LossCurves
+)
+from .logger import BenchmarkLogger, get_logger
+from .utils import detect_device, estimate_batch_size
+from .validator import validate_and_sanitize_args
 
 
 class YOLOTrainer:
-    """Enhanced YOLO trainer with comprehensive monitoring."""
+    """
+    High-level YOLO training wrapper with metrics collection.
     
-    def __init__(self, config: YOLOConfig, experiment_name: str = None):
-        self.config = config
-        self.experiment_name = experiment_name or "default"
-        self.model = None
-        self.results = None
-        self.logger = logging.getLogger(__name__)
-        
-        # Initialize monitoring
-        self.monitor = TrainingMonitor()
-        self.metrics = MetricsCollector()
-        
-        # Setup output directories
-        self.setup_directories()
-        
-    def setup_directories(self):
-        """Create necessary directories for training."""
-        self.output_dir = Path(self.config.project) / self.config.name
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.weights_dir = self.output_dir / "weights"
-        self.weights_dir.mkdir(exist_ok=True)
-        
-        self.logs_dir = self.output_dir / "logs"
-        self.logs_dir.mkdir(exist_ok=True)
-        
-    def load_model(self, model_path: str = None) -> YOLO:
-        """Load or create YOLO model."""
-        model_path = model_path or self.config.model
-        
-        if Path(model_path).exists():
-            self.model = YOLO(model_path)
-            self.logger.info(f"Loaded model from {model_path}")
-        else:
-            self.model = YOLO(self.config.model)
-            self.logger.info(f"Created new {self.config.model} model")
-            
-        return self.model
+    This class orchestrates the training process, collecting comprehensive
+    metrics throughout training for academic analysis.
+    """
     
-    def train(self, 
-              param_overrides: Dict[str, Any] = None,
-              callbacks: List = None) -> Dict[str, Any]:
+    def __init__(
+        self,
+        model_path: str,
+        dataset_path: Path,
+        project_config: ProjectConfig,
+        logger: Optional[BenchmarkLogger] = None
+    ):
         """
-        Train YOLO model with monitoring and metrics collection.
+        Initialize YOLO trainer.
         
         Args:
-            param_overrides: Parameter changes for this training run
-            callbacks: Optional training callbacks
-            
-        Returns:
-            Dictionary with training results and metrics
+            model_path: Path to YOLO model weights (e.g., 'yolov8m.pt')
+            dataset_path: Path to dataset configuration (data.yaml)
+            project_config: Project configuration
+            logger: Logger instance (None = use global logger)
         """
-        start_time = time.time()
-        
-        # Apply parameter overrides
-        if param_overrides:
-            self.config.update_from_dict(param_overrides)
-            
-        # Save configuration
-        config_path = self.output_dir / "config.yaml"
-        self.config.save_to_file(str(config_path))
+        self.model_path = model_path
+        self.dataset_path = dataset_path
+        self.project_config = project_config
+        self.logger = logger or get_logger()
         
         # Initialize model
-        self.load_model()
+        self.model: Optional[YOLO] = None
+        self.metrics_collector: Optional[MetricsCollector] = None
         
-        # Start monitoring
-        self.monitor.start_monitoring()
+        # Training state
+        self._current_epoch: int = 0
+        self._total_epochs: int = 0
         
-        try:
-            # Train model
-            self.logger.info(f"Starting training: {self.experiment_name}")
-            self.logger.info(f"Parameters: {param_overrides or 'baseline'}")
-            
-            results = self.model.train(
-                data=self.config.data,
-                epochs=self.config.epochs,
-                patience=self.config.patience,
-                batch=self.config.batch,
-                imgsz=self.config.imgsz,
-                save=self.config.save,
-                save_period=self.config.save_period,
-                cache=self.config.cache,
-                device=self.config.device,
-                workers=self.config.workers,
-                project=str(self.output_dir),
-                name="train",
-                exist_ok=self.config.exist_ok,
-                pretrained=self.config.pretrained,
-                optimizer=self.config.optimizer,
-                lr0=self.config.lr0,
-                lrf=self.config.lrf,
-                momentum=self.config.momentum,
-                weight_decay=self.config.weight_decay,
-                warmup_epochs=self.config.warmup_epochs,
-                warmup_momentum=self.config.warmup_momentum,
-                warmup_bias_lr=self.config.warmup_bias_lr,
-                box=self.config.box,
-                cls=self.config.cls,
-                dfl=self.config.dfl,
-                hsv_h=self.config.hsv_h,
-                hsv_s=self.config.hsv_s,
-                hsv_v=self.config.hsv_v,
-                degrees=self.config.degrees,
-                translate=self.config.translate,
-                scale=self.config.scale,
-                shear=self.config.shear,
-                perspective=self.config.perspective,
-                flipud=self.config.flipud,
-                fliplr=self.config.fliplr,
-                mosaic=self.config.mosaic,
-                mixup=self.config.mixup,
-                copy_paste=self.config.copy_paste,
-                val=self.config.val,
-                split=self.config.split,
-                verbose=self.config.verbose,
+        self.logger.info(f"Initialized YOLOTrainer with model: {model_path}")
+        self.logger.info(f"Dataset: {dataset_path}")
+    
+    def train(
+        self,
+        hyperparameters: YOLOHyperparameters,
+        run_name: str = "experiment",
+        progress_callback: Optional[Callable[[int, int, Dict], None]] = None
+    ) -> TrainingMetrics:
+        """
+        Train YOLO model with specified hyperparameters.
+        
+        Args:
+            hyperparameters: Complete hyperparameter configuration
+            run_name: Name for this training run (for organization)
+            progress_callback: Optional callback for progress updates
+                               callback(current_epoch, total_epochs, metrics_dict)
+        
+        Returns:
+            TrainingMetrics with comprehensive results
+        """
+        self.logger.section(f"Starting Training: {run_name}")
+        
+        # Initialize model
+        self.model = YOLO(self.model_path)
+        
+        # Setup metrics collection
+        self.metrics_collector = MetricsCollector()
+        
+        # Get device
+        device = self.project_config.device or detect_device()
+        self.logger.info(f"Training device: {device}")
+        
+        # Auto-adjust batch size if needed
+        batch_size = hyperparameters.batch.batch
+        if batch_size == -1:
+            model_variant = self.model_path.split('yolov8')[-1].split('.')[0]
+            batch_size = estimate_batch_size(
+                device,
+                hyperparameters.architecture.imgsz,
+                model_variant
             )
+            hyperparameters.batch.batch = batch_size
+            self.logger.info(f"Auto-detected batch size: {batch_size}")
+        
+        # Prepare training arguments
+        train_args = self._prepare_training_args(
+            hyperparameters,
+            run_name,
+            device
+        )
+        
+        self.logger.info("Hyperparameters:")
+        for key, value in train_args.items():
+            if key not in ['data', 'project', 'name']:
+                self.logger.info(f"  {key}: {value}")
+        
+        # Store epochs for tracking
+        self._total_epochs = hyperparameters.architecture.epochs
+        
+        # Train model
+        try:
+            self.logger.info("Starting training...")
+            self.metrics_collector.start_epoch()
             
-            self.results = results
+            results = self.model.train(**train_args)
             
-            # Collect final metrics
-            final_metrics = self.collect_final_metrics()
-            
-            # Stop monitoring
-            system_stats = self.monitor.stop_monitoring()
-            
-            # Compile comprehensive results
-            training_results = {
-                "experiment_name": self.experiment_name,
-                "parameters": self.config.to_dict(),
-                "param_changes": param_overrides or {},
-                "metrics": final_metrics,
-                "system_stats": system_stats,
-                "training_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat(),
-                "model_size_mb": self.get_model_size(),
-                "status": "completed"
-            }
-            
-            # Save results
-            self.save_results(training_results)
-            
-            return training_results
+            self.logger.success("Training completed successfully!")
             
         except Exception as e:
             self.logger.error(f"Training failed: {str(e)}")
-            
-            # Collect partial results if available
-            system_stats = self.monitor.stop_monitoring()
-            
-            error_results = {
-                "experiment_name": self.experiment_name,
-                "parameters": self.config.to_dict(),
-                "param_changes": param_overrides or {},
-                "error": str(e),
-                "system_stats": system_stats,
-                "training_time": time.time() - start_time,
-                "timestamp": datetime.now().isoformat(),
-                "status": "failed"
-            }
-            
-            self.save_results(error_results)
             raise
-    
-    def collect_final_metrics(self) -> Dict[str, Any]:
-        """Collect final training and validation metrics."""
-        if not self.results:
-            return {}
-            
-        metrics = {}
         
-        # Training metrics from results
-        if hasattr(self.results, 'results_dict'):
-            metrics.update(self.results.results_dict)
+        # Collect final metrics
+        metrics = self._collect_final_metrics(results, run_name)
         
-        # Validation metrics
-        if hasattr(self.results, 'metrics'):
-            metrics['val_metrics'] = self.results.metrics
+        # Measure inference time
+        inference_time = self._measure_inference_time(
+            hyperparameters.architecture.imgsz
+        )
+        metrics.operational.inference_time = inference_time
         
-        # Best metrics
-        if hasattr(self.results, 'best_fitness'):
-            metrics['best_fitness'] = self.results.best_fitness
-        
-        # Add mAP calculations
-        if 'metrics/mAP50(B)' in metrics:
-            metrics['mAP50'] = metrics['metrics/mAP50(B)']
-        if 'metrics/mAP50-95(B)' in metrics:
-            metrics['mAP50_95'] = metrics['metrics/mAP50-95(B)']
+        # Log summary
+        self._log_metrics_summary(metrics)
         
         return metrics
     
-    def get_model_size(self) -> float:
-        """Get model size in MB."""
-        if self.model is None:
-            return 0.0
-            
+    def _prepare_training_args(
+        self,
+        hyperparameters: YOLOHyperparameters,
+        run_name: str,
+        device: str
+    ) -> Dict[str, Any]:
+        """
+        Prepare arguments dictionary for YOLO training.
+        
+        Args:
+            hyperparameters: Hyperparameter configuration
+            run_name: Run name for organization
+            device: Training device
+        
+        Returns:
+            Arguments dictionary for model.train()
+        """
+        # Convert to ultralytics format
+        args = hyperparameters.to_ultralytics_dict()
+        
+        # Add required training parameters
+        args.update({
+            'data': str(self.dataset_path),
+            'project': str(self.project_config.models_dir),
+            'name': run_name,
+            'device': device,
+            'workers': self.project_config.workers,
+            'verbose': self.project_config.verbose,
+            'exist_ok': True,
+            'pretrained': True,
+            'save': True,
+            'save_period': -1,  # Only save last and best
+            'plots': True,
+            'val': True,
+        })
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # CRITICAL: Validate and sanitize arguments for Ultralytics compatibility
+        # Removes deprecated arguments (accumulate, label_smoothing, etc.)
+        # and ensures all arguments are valid for current YOLO version
+        # ═══════════════════════════════════════════════════════════════════
+        args = validate_and_sanitize_args(
+            args,
+            strict=False,  # Filter invalid args instead of raising errors
+            verbose=self.project_config.verbose
+        )
+        
+        return args
+    
+    def _collect_final_metrics(
+        self,
+        results: Any,
+        run_name: str
+    ) -> TrainingMetrics:
+        """
+        Collect final metrics after training completion.
+        
+        Args:
+            results: Training results from ultralytics
+            run_name: Run name
+        
+        Returns:
+            Complete TrainingMetrics object
+        """
+        # Get performance metrics from validation
+        validator = self.model.val()
+        
+        performance = PerformanceMetrics(
+            map50=float(validator.results_dict.get('metrics/mAP50(B)', 0.0)),
+            map50_95=float(validator.results_dict.get('metrics/mAP50-95(B)', 0.0)),
+            precision=float(validator.results_dict.get('metrics/precision(B)', 0.0)),
+            recall=float(validator.results_dict.get('metrics/recall(B)', 0.0)),
+            f1_score=0.0  # Will calculate
+        )
+        
+        # Calculate F1 score
+        if performance.precision + performance.recall > 0:
+            performance.f1_score = (
+                2 * (performance.precision * performance.recall) /
+                (performance.precision + performance.recall)
+            )
+        
+        # Get operational metrics from collector
+        operational = self.metrics_collector.get_operational_metrics()
+        
+        # Extract loss curves from results
+        loss_curves = self._extract_loss_curves(results)
+        
+        # Get model path
+        model_path = self.project_config.models_dir / run_name / "weights" / "best.pt"
+        
+        metrics = TrainingMetrics(
+            performance=performance,
+            operational=operational,
+            loss_curves=loss_curves,
+            model_path=model_path if model_path.exists() else None
+        )
+        
+        return metrics
+    
+    def _extract_loss_curves(self, results: Any) -> LossCurves:
+        """
+        Extract loss curves from training results.
+        
+        Args:
+            results: Training results object
+        
+        Returns:
+            LossCurves object
+        """
+        loss_curves = LossCurves()
+        
         try:
-            model_path = self.weights_dir / "best.pt"
-            if model_path.exists():
-                return model_path.stat().st_size / (1024 * 1024)
-        except:
-            pass
+            # Try to get loss data from results
+            if hasattr(results, 'results_dict'):
+                # Ultralytics stores losses differently depending on version
+                # Try to extract what we can
+                pass
             
-        return 0.0
-    
-    def validate(self, data_path: str = None) -> Dict[str, Any]:
-        """Run validation on trained model."""
-        if self.model is None:
-            raise ValueError("Model not loaded")
-            
-        data_path = data_path or self.config.data
+            # Fallback: read from CSV if available
+            csv_path = self.project_config.models_dir / "results.csv"
+            if csv_path.exists():
+                import pandas as pd
+                df = pd.read_csv(csv_path)
+                
+                if 'box_loss' in df.columns:
+                    loss_curves.box_loss = df['box_loss'].tolist()
+                if 'cls_loss' in df.columns:
+                    loss_curves.cls_loss = df['cls_loss'].tolist()
+                if 'dfl_loss' in df.columns:
+                    loss_curves.dfl_loss = df['dfl_loss'].tolist()
+                if 'val_loss' in df.columns:
+                    loss_curves.val_loss = df['val_loss'].tolist()
         
-        val_results = self.model.val(
-            data=data_path,
-            imgsz=self.config.imgsz,
-            batch=self.config.batch,
-            device=self.config.device,
-            workers=self.config.workers,
-            project=str(self.output_dir),
-            name="val",
-            exist_ok=True,
+        except Exception as e:
+            self.logger.warning(f"Could not extract loss curves: {e}")
+        
+        return loss_curves
+    
+    def _measure_inference_time(
+        self,
+        imgsz: int,
+        num_iterations: int = 100
+    ) -> float:
+        """
+        Measure average inference time per image.
+        
+        Args:
+            imgsz: Image size for testing
+            num_iterations: Number of inference iterations
+        
+        Returns:
+            Average inference time in milliseconds
+        """
+        self.logger.info("Measuring inference time...")
+        
+        try:
+            # Create dummy input
+            dummy_input = torch.randn(1, 3, imgsz, imgsz)
+            
+            if torch.cuda.is_available():
+                dummy_input = dummy_input.cuda()
+                self.model.model.cuda()
+            
+            # Warmup
+            for _ in range(10):
+                _ = self.model.predict(dummy_input, verbose=False)
+            
+            # Measure
+            start_time = time.time()
+            for _ in range(num_iterations):
+                _ = self.model.predict(dummy_input, verbose=False)
+            
+            total_time = time.time() - start_time
+            avg_time_ms = (total_time / num_iterations) * 1000
+            
+            self.logger.info(f"Average inference time: {avg_time_ms:.2f}ms")
+            
+            return avg_time_ms
+        
+        except Exception as e:
+            self.logger.warning(f"Could not measure inference time: {e}")
+            return 0.0
+    
+    def _log_metrics_summary(self, metrics: TrainingMetrics) -> None:
+        """
+        Log a summary of training metrics.
+        
+        Args:
+            metrics: Training metrics to summarize
+        """
+        self.logger.section("Training Results Summary")
+        
+        # Performance metrics
+        self.logger.info("Performance Metrics:")
+        self.logger.info(f"  mAP@0.5:     {metrics.performance.map50:.4f}")
+        self.logger.info(f"  mAP@0.5:0.95: {metrics.performance.map50_95:.4f}")
+        self.logger.info(f"  Precision:   {metrics.performance.precision:.4f}")
+        self.logger.info(f"  Recall:      {metrics.performance.recall:.4f}")
+        self.logger.info(f"  F1-Score:    {metrics.performance.f1_score:.4f}")
+        
+        # Operational metrics
+        self.logger.info("\nOperational Metrics:")
+        self.logger.info(f"  Time/Epoch:  {metrics.operational.time_per_epoch:.2f}s")
+        self.logger.info(f"  Total Time:  {metrics.operational.total_train_time:.2f}s")
+        self.logger.info(f"  Inference:   {metrics.operational.inference_time:.2f}ms")
+        self.logger.info(f"  Memory Peak: {metrics.operational.memory_peak:.2f}GB")
+        self.logger.info(f"  Memory Avg:  {metrics.operational.memory_avg:.2f}GB")
+        
+        if metrics.operational.gpu_utilization_avg:
+            self.logger.info(
+                f"  GPU Util:    {metrics.operational.gpu_utilization_avg:.1f}%"
+            )
+        
+        # Loss
+        final_loss = metrics.loss_curves.get_final_loss()
+        if final_loss > 0:
+            self.logger.info(f"\nFinal Loss: {final_loss:.4f}")
+    
+    def validate(self) -> PerformanceMetrics:
+        """
+        Run validation on the trained model.
+        
+        Returns:
+            PerformanceMetrics from validation
+        """
+        if self.model is None:
+            raise RuntimeError("No model loaded. Train a model first.")
+        
+        self.logger.info("Running validation...")
+        
+        validator = self.model.val()
+        
+        performance = PerformanceMetrics(
+            map50=float(validator.results_dict.get('metrics/mAP50(B)', 0.0)),
+            map50_95=float(validator.results_dict.get('metrics/mAP50-95(B)', 0.0)),
+            precision=float(validator.results_dict.get('metrics/precision(B)', 0.0)),
+            recall=float(validator.results_dict.get('metrics/recall(B)', 0.0)),
+            f1_score=0.0
         )
         
-        return {
-            "val_metrics": val_results.results_dict,
-            "val_time": time.time(),
-            "model_path": str(self.weights_dir / "best.pt")
-        }
-    
-    def predict(self, source: str, **kwargs) -> List[Dict[str, Any]]:
-        """Run inference on images or videos."""
-        if self.model is None:
-            raise ValueError("Model not loaded")
-            
-        results = self.model.predict(
-            source=source,
-            imgsz=self.config.imgsz,
-            conf=self.config.conf_thres,
-            iou=self.config.iou_thres,
-            device=self.config.device,
-            **kwargs
-        )
+        # Calculate F1
+        if performance.precision + performance.recall > 0:
+            performance.f1_score = (
+                2 * (performance.precision * performance.recall) /
+                (performance.precision + performance.recall)
+            )
         
-        return [
-            {
-                "path": r.path,
-                "boxes": r.boxes.xyxy.tolist() if r.boxes else [],
-                "scores": r.boxes.conf.tolist() if r.boxes else [],
-                "classes": r.boxes.cls.tolist() if r.boxes else [],
-                "speed": r.speed
-            }
-            for r in results
-        ]
-    
-    def save_results(self, results: Dict[str, Any]):
-        """Save training results to JSON file."""
-        results_file = self.output_dir / "results.json"
-        
-        with open(results_file, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        
-        self.logger.info(f"Results saved to {results_file}")
-    
-    def export_model(self, format: str = "onnx") -> str:
-        """Export trained model to specified format."""
-        if self.model is None:
-            raise ValueError("Model not loaded")
-            
-        export_path = self.model.export(
-            format=format,
-            imgsz=self.config.imgsz,
-            device=self.config.device,
-            optimize=True,
-            half=True,
-            simplify=True
-        )
-        
-        return str(export_path)
+        return performance

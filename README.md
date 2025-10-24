@@ -1,333 +1,345 @@
-# 🎯 YOLO Hyperparameter Benchmarking System
+# 🔬 YOLO Hyperparameter Benchmark System
 
-A comprehensive system for analyzing how YOLO hyperparameters affect model performance, based on the research:
+> **Investigação Sistemática da Influência de Hiperparâmetros no Treinamento do YOLOv8**  
+> Projeto de Pesquisa Acadêmica - UNIP 2025
 
-**"Influência de Hiperparâmetros no Treinamento do YOLO"**  
-*UNIVERSIDADE PAULISTA - Processamento de Imagem*  
-*Author: Miguel Batista Pinotti*
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## 📋 Overview
+## 📋 Sobre o Projeto
 
-This system provides a systematic approach to benchmark YOLOv8m hyperparameters and understand their impact on model performance. It implements fractional testing methodology where each parameter is tested across multiple fractions of its range (1/5, 2/5, 3/5, 4/5, 5/5).
+Este sistema implementa uma metodologia rigorosa de **benchmark fracionado** para investigação empírica do impacto de hiperparâmetros no treinamento do YOLOv8m, seguindo a metodologia descrita no artigo acadêmico:
 
-## 🚀 Features
+**"Influência de Hiperparâmetros no Treinamento do YOLO"** (UNIP, 2025)
 
-- **Systematic Benchmarking**: Fractional testing across hyperparameter ranges
-- **Rich CLI Interface**: Beautiful terminal interface with interactive configuration
-- **Real-time Monitoring**: CPU, GPU, and memory usage tracking
-- **Comprehensive Visualization**: Interactive Bokeh charts and dashboards
-- **MVC Architecture**: Clean separation of concerns with organized code structure
-- **Performance Analysis**: Detailed metrics and correlation analysis
-- **Reproducible Results**: Fixed random seeds and consistent data splits
+### Objetivos Científicos
 
-## 🏗️ Architecture
+1. **Quantificar** o efeito individual de cada hiperparâmetro nas métricas de desempenho
+2. **Identificar** interações e trade-offs entre hiperparâmetros
+3. **Estabelecer** relações entre configuração, performance (mAP) e custo computacional
+
+### Metodologia: Benchmark Fracionado
+
+O sistema testa cada hiperparâmetro em valores correspondentes a **frações** (1/N, 2/N, ..., N/N) de um valor máximo:
+
+```
+Variável: epochs
+Valor Máximo: 200
+Frações: 5
+
+Testes:
+├─ 1/5 → 40 epochs
+├─ 2/5 → 80 epochs
+├─ 3/5 → 120 epochs  
+├─ 4/5 → 160 epochs
+└─ 5/5 → 200 epochs
+```
+
+## 🏗️ Arquitetura
+
+O projeto segue rigorosamente o padrão **MVC** (Model-View-Controller):
 
 ```
 src/
-├── config/              # Configuration management
-│   ├── yolo_config.py   # YOLO training parameters
-│   ├── benchmark_config.py  # Benchmark settings
-│   └── parameters.py    # Hyperparameter space definitions
-├── cli/                 # CLI interface (MVC View)
-│   ├── main.py          # Main CLI entry point
-│   ├── commands.py      # CLI commands
-│   └── core/            # Backend logic (MVC Controller)
-│       ├── trainer.py   # YOLO training wrapper
-│       ├── benchmark.py # Benchmark orchestrator
-│       ├── monitor.py   # System monitoring
-│       └── metrics.py   # Metrics collection
-├── results_visualizer.py # Results visualization (MVC View)
-└── utils/               # Utility functions
+├── cli/                      # View & Controller
+│   ├── main.py              # Entry point
+│   ├── menu.py              # Menu principal
+│   ├── config_menu.py       # Configuração de hiperparâmetros
+│   ├── benchmark_menu.py    # Interface de benchmark
+│   ├── progress.py          # Progress displays (Rich)
+│   └── visualizer.py        # Visualização de configs
+│
+├── cli/core/                # Model
+│   ├── config.py            # Modelos Pydantic
+│   ├── trainer.py           # Treinamento YOLO
+│   ├── benchmark.py         # Motor de benchmark
+│   ├── metrics.py           # Coleta de métricas
+│   ├── logger.py            # Sistema de logging
+│   └── utils.py             # Utilitários
+│
+├── visualization/           # Visualizações Bokeh
+│   └── bokeh_plots.py       # Gráficos interativos
+│
+├── models/                  # Modelos treinados
+│   ├── checkpoints/
+│   └── best_models/
+│
+└── results/                 # Resultados
+    ├── benchmarks/          # JSONs
+    ├── graphs/              # HTMLs Bokeh
+    ├── reports/             # Relatórios
+    └── logs/                # Logs
 ```
 
-## 📊 Supported Hyperparameters
+## 🚀 Instalação
 
-Based on the research article, the system benchmarks these key parameters:
+### Pré-requisitos
 
-### Learning Parameters
-- **lr0**: Initial learning rate (0.0001 - 0.1)
-- **lrf**: Final learning rate factor (0.01 - 1.0)
-- **momentum**: SGD momentum (0.6 - 0.98)
-- **weight_decay**: L2 regularization (0.0001 - 0.001)
-
-### Training Configuration
-- **batch**: Batch size (4 - 64)
-- **epochs**: Training epochs (50 - 300)
-- **imgsz**: Image size (320 - 1280)
-
-### Data Augmentation
-- **mosaic**: Mosaic augmentation (0.0 - 1.0)
-- **mixup**: Mixup augmentation (0.0 - 1.0)
-- **degrees**: Rotation degrees (0.0 - 45.0)
-- **scale**: Scale augmentation (0.0 - 0.5)
-- **hsv_h/s/v**: HSV color augmentation
-
-### Loss Parameters
-- **box**: Box loss gain (0.02 - 0.2)
-- **cls**: Classification loss gain (0.2 - 4.0)
-- **dfl**: Distribution focal loss gain (0.4 - 6.0)
-
-## 🛠️ Installation
-
-### Prerequisites
 - Python 3.8+
-- CUDA-compatible GPU (recommended)
+- CUDA 11.8+ (para GPU NVIDIA) ou
+- Apple Silicon com MPS (M1/M2)
 
-### Install Dependencies
+### Passo a Passo
+
 ```bash
+# 1. Clone o repositório
+git clone <repository-url>
+cd trabalhoPDI
+
+# 2. Crie ambiente virtual
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# ou
+venv\Scripts\activate  # Windows
+
+# 3. Instale PyTorch (escolha sua plataforma)
+
+# GPU NVIDIA (CUDA):
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+
+# Apple Silicon (MPS):
+pip install torch torchvision
+
+# CPU apenas:
+pip install torch torchvision
+
+# 4. Instale dependências
 pip install -r requirements.txt
+
+# 5. Configure o dataset
+# Edite config.yaml e ajuste dataset_path para seu data.yaml
 ```
 
-### Install System Dependencies
+## 💻 Uso
+
+### Início Rápido
+
 ```bash
-# Ubuntu/Debian
-sudo apt-get install python3-dev python3-pip
-
-# macOS
-brew install python3
-
-# Windows
-# Install Python from python.org
+python -m src.cli.main --dataset /path/to/data.yaml
 ```
 
-## 🚀 Quick Start
+### Opções de Linha de Comando
 
-### 1. Interactive Setup
 ```bash
-python -m src.cli.main quickstart
+# Especificar configuração custom
+python -m src.cli.main --config my_config.yaml
+
+# Usar modelo diferente
+python -m src.cli.main --model yolov8l.pt
+
+# Modo verbose
+python -m src.cli.main --verbose
+
+# Forçar uso de CPU
+python -m src.cli.main --no-gpu
 ```
 
-### 2. Run Benchmark
-```bash
-# Basic benchmark
-python -m src.cli.main benchmark
+### Interface CLI
 
-# With custom configuration
-python -m src.cli.main benchmark --config config/custom.yaml
+O sistema oferece um menu interativo completo:
 
-# Dry run to see experiments
-python -m src.cli.main benchmark --dry-run
+```
+╔══════════════════════════════════════════════════════════════╗
+║        🔬 YOLO Hyperparameter Benchmark System v1.0         ║
+║              Pesquisa UNIP - Processamento de Imagem         ║
+╚══════════════════════════════════════════════════════════════╝
 
-# Parallel execution
-python -m src.cli.main benchmark --max-workers 4
+┌─ Menu Principal ─────────────────────────────────────────────┐
+│  [1] 🎯 Treinar modelo único                                 │
+│  [2] 📊 Executar Benchmark Fracionado                        │
+│  [3] 📈 Visualizar Resultados (Bokeh)                        │
+│  [4] ⚙️  Configurar Hiperparâmetros                          │
+│  [5] 💾 Salvar/Carregar Configuração                         │
+│  [6] ℹ️  Informações do Sistema                              │
+│  [7] 📖 Ajuda                                                │
+│  [0] ❌ Sair                                                 │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Analyze Results
-```bash
-# Interactive dashboard
-python -m src.cli.main analyze --interactive
+## 📊 Hiperparâmetros Suportados
 
-# Generate static reports
-python -m src.cli.main analyze --format html --output analysis/
-```
+O sistema permite benchmarkar **TODOS** estes hiperparâmetros:
 
-## 📈 Usage Examples
+### Otimização
+- `lr0` - Taxa de aprendizado inicial
+- `lrf` - Taxa de aprendizado final
+- `momentum` - Momentum do SGD
+- `weight_decay` - Regularização L2
+- `warmup_epochs` - Épocas de warmup
+- `optimizer` - Algoritmo (SGD/Adam/AdamW/RMSProp)
 
-### Configuration Management
-```bash
-# Create new configuration
-python -m src.cli.main config --create
+### Batch
+- `batch` - Tamanho do batch
+- `accumulate` - Gradient accumulation
 
-# Edit existing configuration
-python -m src.cli.main config --edit config/benchmark.yaml
+### Arquitetura
+- `imgsz` - Resolução da imagem
+- `epochs` - Número de épocas
 
-# Validate configuration
-python -m src.cli.main config --validate config/benchmark.yaml
+### Augmentação de Dados
+- `hsv_h`, `hsv_s`, `hsv_v` - Augmentações HSV
+- `degrees`, `translate`, `scale`, `shear` - Geométricas
+- `mosaic`, `mixup`, `copy_paste` - Avançadas
+- `fliplr`, `flipud` - Flips
 
-# Show defaults
-python -m src.cli.main config --show-defaults
-```
+### Regularização
+- `label_smoothing` - Suavização de labels
+- `dropout` - Dropout
 
-### Custom Parameter Testing
-```bash
-# Test specific parameters
-python -m src.cli.main benchmark --parameter lr0 batch epochs
+### Pós-processamento
+- `conf` - Confidence threshold
+- `iou` - IoU threshold NMS
 
-# Custom fractions
-python -m src.cli.main benchmark --fractions 0.25,0.5,0.75,1.0
-```
+## 📈 Métricas Coletadas
 
-## 📊 Visualization Features
+### Performance
+- **mAP@0.5** - Mean Average Precision @ IoU 0.5
+- **mAP@0.5:0.95** - mAP em múltiplos IoUs
+- **Precision** - Precisão
+- **Recall** - Revocação  
+- **F1-Score** - Média harmônica
 
-### Available Plots
-1. **Parameter Impact Analysis**: Line plots showing performance vs parameter values
-2. **Performance Tradeoff**: Scatter plots of accuracy vs training time
-3. **Parameter Heatmap**: Color-coded performance across parameters and fractions
-4. **Correlation Matrix**: Relationships between parameters and metrics
-5. **Interactive Dashboard**: Web-based exploration tool
+### Operacionais
+- **time_per_epoch** - Tempo médio por época
+- **total_train_time** - Tempo total
+- **inference_time** - Latência de inferência
+- **memory_peak** - Pico de memória
+- **memory_avg** - Memória média
+- **gpu_utilization** - Utilização GPU
 
-### Dashboard Access
-```bash
-# Launch interactive dashboard
-python -m src.cli.main analyze --interactive --port 8080
-```
+## 📊 Visualizações Bokeh
 
-Access at: http://localhost:8080
+O sistema gera dashboards HTML interativos com:
 
-## 📋 Configuration
+1. **Métricas vs Frações** - Linhas mostrando evolução das métricas
+2. **Performance vs Custo** - Scatter plot (mAP vs tempo)
+3. **Ranking** - Barras horizontais ordenadas por mAP
+4. **Comparação F1** - Barras comparando F1-Scores
+5. **Curvas de Loss** - Evolução do loss
 
-### Example Configuration File
-```yaml
-# config/benchmark.yaml
-name: "yolo_hyperparameter_study"
-description: "Comprehensive YOLOv8m hyperparameter analysis"
+Todos os gráficos são **totalmente interativos** com:
+- Hover tooltips detalhados
+- Pan & Zoom
+- Exportação de imagens
+- Legendas clicáveis
 
-# Dataset
-dataset_path: "data/coco128.yaml"
+## 🔬 Exemplo de Workflow
 
-# Model
-base_model: "yolov8m.pt"
-model_size: "m"
-
-# Benchmark parameters
-fractions: [0.2, 0.4, 0.6, 0.8, 1.0]
-selected_parameters:
-  - lr0
-  - batch
-  - epochs
-  - momentum
-  - mosaic
-  - mixup
-repetitions: 3
-
-# Resource limits
-max_epochs: 100
-max_batch_size: 32
-memory_limit_gb: 8.0
-max_time_hours: 24.0
-
-# Output
-output_dir: "results"
-save_models: true
-generate_plots: true
-generate_report: true
-
-# Random seed for reproducibility
-seed: 42
-```
-
-## 🔧 Advanced Usage
-
-### Programmatic Usage
 ```python
-from src.config import BenchmarkConfig, YOLOConfig
-from src.cli.core import BenchmarkOrchestrator
+# 1. Executar benchmark de epochs
+Menu → [2] Benchmark Fracionado
+→ Variável: epochs
+→ Valor máximo: 200
+→ Frações: 5
 
-# Create configuration
-config = BenchmarkConfig()
-config.selected_parameters = ['lr0', 'batch', 'epochs']
-config.repetitions = 5
+# Sistema executa 5 treinos:
+# 40, 80, 120, 160, 200 epochs
 
-# Run benchmark
-orchestrator = BenchmarkOrchestrator(config)
-results = orchestrator.run_benchmark(max_workers=2)
+# 2. Visualizar resultados
+Menu → [3] Visualizar Resultados
+→ Selecionar benchmark
+→ Dashboard HTML gerado em src/results/graphs/
 
-# Analyze results
-from src.results_visualizer import ResultsVisualizer
-visualizer = ResultsVisualizer()
-visualizer.generate_all_plots(Path("results"), Path("analysis"))
+# 3. Comparar com outro hiperparâmetro
+Menu → [2] Benchmark Fracionado
+→ Variável: lr0
+→ Valor máximo: 0.1
+→ Frações: 5
+
+# 4. Comparar benchmarks
+Menu → [3] Visualizar → Comparar
 ```
 
-### Custom Parameter Ranges
-```python
-from src.config.parameters import HyperparameterSpace
-
-param_space = HyperparameterSpace()
-param_space.parameters['lr0'].min_value = 0.001
-param_space.parameters['lr0'].max_value = 0.05
-```
-
-## 📊 Output Structure
+## 📁 Estrutura de Resultados
 
 ```
-results/
-├── benchmark_YYYYMMDD_HHMMSS/
-│   ├── experiment_plan.json
-│   ├── benchmark_summary.json
-│   ├── parameter_analysis.json
-│   ├── benchmark_results.csv
-│   ├── experiment_*/
-│   │   ├── experiment_results.json
-│   │   ├── config.yaml
-│   │   └── weights/
-│   └── analysis/
-│       ├── parameter_impact.html
-│       ├── performance_tradeoff.html
-│       ├── parameter_heatmap.html
-│       └── correlation_matrix.html
+src/results/
+├── benchmarks/
+│   ├── epochs_20250117_143022_abc123.json
+│   └── lr0_20250117_150030_def456.json
+│
+├── graphs/
+│   ├── dashboard_epochs_20250117_143500.html
+│   └── comparison_epochs_lr0_20250117_151000.html
+│
+├── reports/
+│   └── summary_report_20250117.md
+│
+└── logs/
+    └── yolo_benchmark_20250117_140000.log
 ```
 
-## 🎯 Research Methodology
+## 🎯 Boas Práticas para Pesquisa
 
-### Fractional Testing Approach
-The system implements the fractional testing methodology described in the research:
+1. **Reprodutibilidade**
+   - Sempre use `seed` fixo (padrão: 42)
+   - Documente versões de bibliotecas
+   - Salve configurações em YAML
 
-1. **Parameter Range Definition**: Each parameter has defined min/max values
-2. **Fractional Sampling**: Test at 20%, 40%, 60%, 80%, and 100% of range
-3. **Statistical Significance**: Multiple repetitions with different random seeds
-4. **Performance Metrics**: mAP@0.5, mAP@0.5:0.95, precision, recall, F1-score
-5. **Efficiency Metrics**: Training time, inference latency, memory usage
+2. **Controle de Variáveis**
+   - Varie apenas 1 hiperparâmetro por vez
+   - Use configuração base consistente
+   - Repita experimentos críticos
 
-### Analysis Features
-- **Parameter Sensitivity**: Impact analysis for each hyperparameter
-- **Correlation Analysis**: Relationships between parameters and performance
-- **Pareto Optimization**: Tradeoff analysis between accuracy and efficiency
-- **Statistical Significance**: Confidence intervals and significance testing
+3. **Documentação**
+   - Mantenha logs detalhados
+   - Anote observações qualitativas
+   - Relacione com teoria
 
-## 🔍 Troubleshooting
+4. **Análise Estatística**
+   - Compare resultados com baseline
+   - Calcule intervalos de confiança se possível
+   - Identifique outliers
 
-### Common Issues
+## 🐛 Troubleshooting
 
-#### CUDA Out of Memory
+### Erro: "CUDA out of memory"
 ```bash
-# Reduce batch size in configuration
-python -m src.cli.main config --edit config/benchmark.yaml
-# Set max_batch_size to smaller value
+# Reduza batch size
+Menu → [4] Configurar → [2] Batch → batch: 8
 ```
 
-#### Slow Training
+### Treinamento muito lento
 ```bash
-# Reduce epochs or use smaller model
-# Check GPU utilization with nvidia-smi
+# Verifique GPU
+Menu → [6] Informações do Sistema
+# Se não houver GPU, considere reduzir imgsz e epochs
 ```
 
-#### Missing Dependencies
+### Dataset não encontrado
 ```bash
-pip install --upgrade ultralytics rich bokeh pandas numpy
+# Verifique config.yaml
+dataset_path: "/caminho/completo/para/data.yaml"
 ```
 
-### Performance Optimization
-- Use SSD storage for datasets
-- Enable GPU acceleration
-- Adjust batch size based on GPU memory
-- Use parallel processing with appropriate worker count
+## 📚 Referências
 
-## 📚 Research References
+Este projeto implementa conceitos de:
 
-- **YOLOv8 Documentation**: https://docs.ultralytics.com/
-- **Bokeh Visualization**: https://docs.bokeh.org/
-- **Rich CLI Library**: https://rich.readthedocs.io/
-- **Research Paper**: "Influência de Hiperparâmetros no Treinamento do YOLO"
+1. **YOLOv8**: Ultralytics YOLO  
+   [https://docs.ultralytics.com](https://docs.ultralytics.com)
 
-## 🤝 Contributing
+2. **Fractional Factorial Design**: Montgomery, D. C. (2017)  
+   "Design and Analysis of Experiments"
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/new-feature`
-3. Commit changes: `git commit -am 'Add new feature'`
-4. Push to branch: `git push origin feature/new-feature`
-5. Submit pull request
+3. **Hyperparameter Optimization**: Bergstra & Bengio (2012)  
+   "Random Search for Hyper-Parameter Optimization"
 
-## 📄 License
+## 👥 Autores
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**Equipe de Pesquisa UNIP**  
+Projeto TCC - Processamento de Imagem  
+2025
 
-## 📞 Support
+## 📄 Licença
 
-For questions or issues:
-- Create GitHub issue
-- Contact: miguel.pinotti@unip.br
-- Research Group: UNIVERSIDADE PAULISTA - Processamento de Imagem
+Este projeto é desenvolvido para fins acadêmicos.
+
+## 🤝 Contribuições
+
+Para dúvidas ou sugestões sobre a metodologia, consulte o artigo de referência ou entre em contato com a equipe de pesquisa.
 
 ---
 
-**Built with ❤️ for computer vision research**
+**Desenvolvido com** 🔬 **para pesquisa acadêmica rigorosa em Computer Vision**
