@@ -44,7 +44,6 @@ runs/
 *.weights
 
 # Data files
-data/
 datasets/
 *.zip
 *.tar.gz
