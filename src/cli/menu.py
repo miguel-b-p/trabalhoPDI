@@ -231,7 +231,7 @@ no Treinamento do YOLOv8 para Detecção de Objetos[/italic]
     def _handle_visualization(self) -> None:
         """Handle results visualization."""
         from .core.benchmark import BenchmarkEngine
-        from .visualization.bokeh_plots import BokehVisualizer
+        from ..visualization.bokeh_plots import BokehVisualizer
         
         self.console.rule("[bold cyan]Visualização de Resultados[/bold cyan]")
         

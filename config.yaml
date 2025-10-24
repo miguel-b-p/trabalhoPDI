@@ -17,7 +17,7 @@ model_variant: "yolov8m.pt"  # Options: yolov8n/s/m/l/x.pt
 
 # Dataset Configuration
 # IMPORTANT: Update this path to point to your dataset's data.yaml file
-dataset_path: "bkp/test/data/data.yaml"
+dataset_path: "data/data.yaml"
 
 # Directory Structure
 models_dir: "src/models"          # Trained models and checkpoints
